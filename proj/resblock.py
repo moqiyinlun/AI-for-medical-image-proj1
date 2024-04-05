@@ -39,7 +39,7 @@ from torch.nn import functional as F
 class ResBlock(nn.Module):
     def __init__(self):
         super(ResBlock, self).__init__()
-        self.conv1 = nn.Conv3d(1, 16, kernel_size=3, padding=1) # 输出维度: (16, 20, 192, 192)
+        self.conv1 = nn.Conv3d(1, 16, kernel_size=(5,3,3), padding=1) # 输出维度: (16, 20, 192, 192)
         self.pool1 = nn.MaxPool3d(2, 2) # 输出维度: (16, 10, 96, 96)
         self.pool2 = nn.MaxPool3d(2, 2) # 输出维度: (16, 10, 96, 96)
         self.conv2 = nn.Conv3d(16, 32, kernel_size=3, padding=1) # 输出维度: (32, 10, 96, 96)
