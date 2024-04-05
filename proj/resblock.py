@@ -73,47 +73,43 @@ class ResBlock(nn.Module):
 class ResBlock_time(nn.Module):
     def __init__(self):
         super(ResBlock_time, self).__init__()
-        # 空间卷积层
-        self.conv2d1 = nn.Conv2d(1, 16, kernel_size=(3, 3), padding=(1, 1))
-        self.pool2d1 = nn.MaxPool2d(2, 2)  # 空间下采样
-        self.conv2d2 = nn.Conv2d(16, 32, kernel_size=(3, 3), padding=(1, 1))
+        self.conv2d1 = nn.Conv2d(1, 16, kernel_size=3, padding=1)
+        self.pool1 = nn.MaxPool2d(2, 2)  
+        self.conv2d2 = nn.Conv2d(16, 32, kernel_size=3, padding=1)
 
-        # 时间卷积层，处理时间维度，用于提取时间信息
-        self.conv1d1 = nn.Conv1d(20, 20, kernel_size=3, padding=1, groups=20)  # 时间维度卷积
+        self.conv1d = nn.Conv1d(32 * 48 * 48, 32 * 48 * 48, kernel_size=3, padding=1, groups=32 * 48 * 48)
 
-        # 后续2D卷积层
-        self.conv2d3 = nn.Conv2d(32, 64, kernel_size=(3, 3), padding=(1, 1))
-        self.conv2d4 = nn.Conv2d(64, 64, kernel_size=(3, 3), padding=(1, 1))
-        self.conv2d5 = nn.Conv2d(64, 32, kernel_size=(3, 3), padding=(1, 1))
-        self.conv2d6 = nn.Conv2d(32, 16, kernel_size=(3, 3), padding=(1, 1))
-        self.conv2d7 = nn.Conv2d(16, 1, kernel_size=(3, 3), padding=(1, 1))
-        self.up2d1 = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)  # 空间上采样
+        self.conv2d3 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
+        self.conv2d4 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
+        self.conv2d5 = nn.Conv2d(128, 64, kernel_size=3, padding=1)
+        self.conv2d6 = nn.Conv2d(64, 32, kernel_size=3, padding=1)
+        self.conv2d7 = nn.Conv2d(32, 16, kernel_size=3, padding=1)
+        self.conv2d8 = nn.Conv2d(16, 1, kernel_size=3, padding=1)
+        self.up1 = nn.Upsample(scale_factor=2, mode='bilinear')  
 
     def forward(self, x):
-        batch_size, channels, time, height, width = x.size()
+        batch_size, channels, depth, height, width = x.size()
+        identity = x.clone()
 
-        # 先处理所有空间信息
-        x = x.view(batch_size * time, channels, height, width)  # 将时间维和批次维合并，对每个时间帧单独处理空间信息
-        x = F.relu(self.conv2d1(x))
-        x = self.pool2d1(x)
-        x = F.relu(self.conv2d2(x))
-        x = x.view(batch_size, time, 32, height // 2, width // 2)  # 恢复时间维度
+        out = x.view(batch_size * depth, channels, height, width)
+        out = F.relu(self.conv2d1(out))
+        out = self.pool1(out)
+        out = F.relu(self.conv2d2(out))
+        out = out.view(batch_size, depth, 32, height // 2, width // 2)
+        out = out.permute(0, 2, 3, 4, 1).contiguous() 
+        out = out.view(batch_size, 32 * (height // 2) * (width // 2), depth)
+        out = F.relu(self.conv1d(out))
+        out = out.view(batch_size, 32, height // 2, width // 2, depth).permute(0, 4, 1, 2, 3)
 
-        # 通过1D卷积处理时间信息
-        x_time = x.permute(0, 2, 1, 3, 4).contiguous()  # 调整维度以将时间维度放到卷积位置
-        x_time = x_time.view(batch_size * 32, time, height // 2 * width // 2)  # 合并空间维度进行1D卷积
-        x_time = F.relu(self.conv1d1(x_time))
-        x_time = x_time.view(batch_size, 32, time, height // 2, width // 2)  # 恢复维度
-        x_time = x_time.permute(0, 2, 1, 3, 4).contiguous()  # 恢复原始维度顺序
+        out = out.view(batch_size * depth, 32, height // 2, width // 2)
+        out = F.relu(self.conv2d3(out))
+        out = F.relu(self.conv2d4(out))
+        out = F.relu(self.conv2d5(out))
+        out = F.relu(self.conv2d6(out))
+        out = F.relu(self.conv2d7(out))
+        out = self.up1(out)
+        out = self.conv2d8(out)
+        out = out.view(batch_size,  1,depth ,height, width)  
 
-        # 继续后续的2D卷积操作
-        x = x_time.view(batch_size * time, 32, height // 2, width // 2)
-        x = F.relu(self.conv2d3(x))
-        x = F.relu(self.conv2d4(x))
-        x = F.relu(self.conv2d5(x))
-        x = F.relu(self.conv2d6(x))
-        x = self.up2d1(x)  # 上采样回原始高宽
-        x = F.relu(self.conv2d7(x))
-        x = x.view(batch_size,1, time, height, width)  # 重新调整维度以匹配输入格式
-
-        return x
+        out += identity
+        return out
