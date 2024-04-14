@@ -45,10 +45,12 @@ def edge_loss(y_pred, y_true):
         for t in range(y_pred.shape[2]):
             grad_pred_x[b, :, t] = F.conv2d(y_pred[b, :, t:t+1], sobel_x, padding=1)
             grad_pred_y[b, :, t] = F.conv2d(y_pred[b, :, t:t+1], sobel_y, padding=1)
-            plt.imshow(y_pred[b,0,t].cpu().detach().numpy(),cmap='gray')
-            plt.show()
+      
             grad_true_x[b, :, t] = F.conv2d(y_true[b, :, t:t+1], sobel_x, padding=1)
             grad_true_y[b, :, t] = F.conv2d(y_true[b, :, t:t+1], sobel_y, padding=1)
+    # plt.imshow(grad_pred_x[0,0,0].cpu().detach().numpy(),cmap='gray')
+    # # plt.show()
+    # plt.savefig('grad_pred_x.png')
     grad_pred = torch.sqrt(grad_pred_x ** 2 + grad_pred_y ** 2)
     grad_true = torch.sqrt(grad_true_x ** 2 + grad_true_y ** 2)
     return F.l1_loss(grad_pred, grad_true)
